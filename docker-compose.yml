@@ -1,0 +1,172 @@
+# Infraestrutura LOCAL de desenvolvimento. Não é configuração de produção.
+#
+#   make up       → postgres (memória + RAG)
+#   make up-obs   → + Langfuse (traces)            perfil "observabilidade"
+#   make up-all   → + Ollama (offline) + app       perfis "offline" e "app"
+#
+# Credenciais vêm do .env; os defaults abaixo são SÓ de desenvolvimento.
+
+x-langfuse-env: &langfuse-env
+  DATABASE_URL: postgresql://${POSTGRES_USER:-agente}:${POSTGRES_PASSWORD:-agente}@postgres:5432/langfuse
+  SALT: ${LANGFUSE_SALT:-salt-local-dev}
+  ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+  TELEMETRY_ENABLED: "false"
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: clickhouse
+  CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse-local}
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-redis-local}
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_PASSWORD:-minio-local-123}
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agente}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agente}
+      POSTGRES_DB: ${POSTGRES_DB:-agente}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agente} -d ${POSTGRES_DB:-agente}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # --- Observabilidade (Langfuse v3 self-hosted) ------------------------------------------
+  langfuse-web:
+    image: langfuse/langfuse:3
+    restart: unless-stopped
+    profiles: [observabilidade, all]
+    depends_on: &langfuse-deps
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    ports:
+      - "${LANGFUSE_PORT:-3000}:3000"
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_URL: http://localhost:${LANGFUSE_PORT:-3000}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-segredo-local-dev}
+      # Criação automática (headless) da org, do projeto, das chaves e do usuário:
+      # ninguém precisa se cadastrar para ver os traces.
+      LANGFUSE_INIT_ORG_ID: locadora-exemplo
+      LANGFUSE_INIT_ORG_NAME: Locadora Exemplo
+      LANGFUSE_INIT_PROJECT_ID: agente
+      LANGFUSE_INIT_PROJECT_NAME: uaidev
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-local-dev}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-local-dev}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-admin@exemplo.local}
+      LANGFUSE_INIT_USER_NAME: Admin
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-senha-local-123}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://$$(hostname -i):3000/api/public/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    restart: unless-stopped
+    profiles: [observabilidade, all]
+    depends_on: *langfuse-deps
+    environment: *langfuse-env
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.3
+    restart: unless-stopped
+    profiles: [observabilidade, all]
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse-local}
+    volumes:
+      - clickhouse:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    profiles: [observabilidade, all]
+    command: ["redis-server", "--requirepass", "${LANGFUSE_REDIS_PASSWORD:-redis-local}"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:-redis-local}", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: cgr.dev/chainguard/minio
+    restart: unless-stopped
+    profiles: [observabilidade, all]
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" /data'
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_PASSWORD:-minio-local-123}
+    volumes:
+      - minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  # --- Modelos locais (modo offline) ---------------------------------------------------
+  ollama:
+    image: ollama/ollama
+    restart: unless-stopped
+    profiles: [offline, all]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+
+  # --- O próprio app em container (opcional; o normal é `make run` na máquina) ---------
+  app:
+    build: .
+    profiles: [app, all]
+    depends_on:
+      postgres: { condition: service_healthy }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-agente}:${POSTGRES_PASSWORD:-agente}@postgres:5432/${POSTGRES_DB:-agente}
+      MEMORIA_BACKEND: postgres
+      RAG_BACKEND: pgvector
+      LANGFUSE_HOST: http://langfuse-web:3000
+      LANGFUSE_URL_PUBLICA: http://localhost:${LANGFUSE_PORT:-3000}
+      OLLAMA_BASE_URL: http://ollama:11434
+    ports:
+      - "8501:8501"
+    healthcheck:
+      # start_period: a ingestão roda antes do Streamlit subir.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  pgdata:
+  clickhouse:
+  minio:
+  ollama:

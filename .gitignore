@@ -1,0 +1,31 @@
+# Segredos: nunca versionar. O único arquivo de env versionado é o .env.example.
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Dados locais (SQLite, Chroma)
+.data/
+
+# Resultados de evals: só o baseline é versionado
+evals/resultados/*
+!evals/resultados/baseline.json
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

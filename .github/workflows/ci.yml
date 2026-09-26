@@ -1,0 +1,82 @@
+# CI: lint + tipos + testes (sem rede, LLM fake) + integração com Postgres/pgvector.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualidade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # o gitleaks varre o histórico
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --python 3.12
+
+      - name: Nenhum .env versionado
+        run: |
+          if git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$'; then
+            echo "::error::Arquivo .env versionado. Remova do git e use só o .env.example."
+            exit 1
+          fi
+
+      - name: Lint (ruff)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Tipos (mypy --strict)
+        run: uv run mypy
+
+      - name: Testes unitários (cobertura ≥ 80%)
+        run: uv run pytest
+
+      - name: Segredos (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  integracao:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: agente
+          POSTGRES_PASSWORD: agente
+          POSTGRES_DB: agente
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agente" --health-interval 3s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --python 3.12
+      - name: Prepara o banco (o mesmo init.sql do compose)
+        run: psql postgresql://agente:agente@localhost:5432/agente -f infra/postgres/init.sql
+      - name: Testes de integração (memória e RAG no Postgres)
+        run: uv run pytest -m integracao --no-cov
+
+  links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Links do README e de docs/ (lychee)
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --no-progress --offline --include-fragments README.md CONTRIBUTING.md 'docs/**/*.md'
+          fail: true

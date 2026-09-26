@@ -1,0 +1,36 @@
+# Evals com LLM de verdade: disparo MANUAL (tem custo), usando os secrets do repositório.
+name: Evals
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_casos:
+        description: "Limite de casos (vazio = todos)"
+        required: false
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LLM_PROVIDER: openai
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      LLM_MODELO_RAPIDO: ${{ vars.LLM_MODELO_RAPIDO || 'gpt-5.6-luna' }}
+      LLM_MODELO_FORTE: ${{ vars.LLM_MODELO_FORTE || 'gpt-5.6-luna' }}
+      LLM_REASONING_EFFORT: low
+      JUIZ_TEMPERATURA: ""
+      MEMORIA_BACKEND: sqlite
+      RAG_BACKEND: chroma
+      EVAL_MAX_CASOS: ${{ inputs.max_casos }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --python 3.12
+      - run: uv run python -m agente.rag.ingestao
+      - name: Roda os evals (o resumo vai para o job summary)
+        run: uv run python -m evals.rodar_evals
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultados-evals
+          path: evals/resultados/

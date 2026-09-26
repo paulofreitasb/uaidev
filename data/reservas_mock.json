@@ -1,0 +1,40 @@
+{
+  "_aviso": "Dados 100% fictícios, apenas para o exemplo didático.",
+  "reservas": {
+    "ABC1234": {
+      "status": "confirmada",
+      "cliente": "Ana",
+      "categoria": "SUV",
+      "retirada": {"cidade": "Belo Horizonte", "loja": "Aeroporto de Confins", "data": "2026-10-12 10:00"},
+      "devolucao": {"cidade": "Belo Horizonte", "loja": "Aeroporto de Confins", "data": "2026-10-19 10:00"}
+    },
+    "XYZ9876": {
+      "status": "em andamento",
+      "cliente": "Bruno",
+      "categoria": "compacto",
+      "retirada": {"cidade": "São Paulo", "loja": "Paulista", "data": "2026-09-20 09:00"},
+      "devolucao": {"cidade": "São Paulo", "loja": "Paulista", "data": "2026-09-28 18:00"}
+    },
+    "LMN4567": {
+      "status": "cancelada",
+      "cliente": "Carla",
+      "categoria": "econômico",
+      "retirada": {"cidade": "Rio de Janeiro", "loja": "Santos Dumont", "data": "2026-09-01 08:00"},
+      "devolucao": {"cidade": "Rio de Janeiro", "loja": "Santos Dumont", "data": "2026-09-05 08:00"}
+    },
+    "QRS2468": {
+      "status": "aguardando pagamento",
+      "cliente": "Diego",
+      "categoria": "sedan",
+      "retirada": {"cidade": "Curitiba", "loja": "Centro", "data": "2026-11-03 14:00"},
+      "devolucao": {"cidade": "Curitiba", "loja": "Centro", "data": "2026-11-06 14:00"}
+    },
+    "DEF1357": {
+      "status": "finalizada",
+      "cliente": "Elisa",
+      "categoria": "premium",
+      "retirada": {"cidade": "Salvador", "loja": "Aeroporto", "data": "2026-08-10 12:00"},
+      "devolucao": {"cidade": "Salvador", "loja": "Aeroporto", "data": "2026-08-15 12:00"}
+    }
+  }
+}

@@ -1,0 +1,76 @@
+[project]
+name = "uaidev"
+version = "1.0.0"
+description = "Agente conversacional didático com LangGraph + Streamlit (Locadora Exemplo)."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=1.0,<2",
+    "langchain-core>=1.0,<2",
+    "langchain-openai>=1.0,<2",
+    "langchain-anthropic>=1.0,<2",
+    "langchain-ollama>=1.0,<2",
+    "langchain-text-splitters>=1.0,<2",
+    "langchain-postgres>=0.0.15",
+    "langchain-chroma>=1.0",
+    "langgraph>=1.0,<2",
+    "langgraph-checkpoint-postgres>=3.0",
+    "langgraph-checkpoint-sqlite>=3.0",
+    "psycopg[binary,pool]>=3.2",
+    "pydantic-settings>=2.6",
+    "streamlit>=1.40",
+    "langfuse>=3,<5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pre-commit>=4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agente"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "evals", "app"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # acentos do português não são "caracteres ambíguos"
+
+[tool.ruff.lint.isort]
+known-first-party = ["agente", "evals", "tests"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+packages = ["agente"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["langchain_chroma.*", "langchain_postgres.*", "langfuse.*"]
+ignore_missing_imports = true
+
+# Os protocolos TypedDictLike dos stubs do LangGraph não casam com TypedDict no mypy
+# (add_node acusa "no overload variant"). O código em si é o dos exemplos oficiais.
+[[tool.mypy.overrides]]
+module = ["agente.grafo"]
+disable_error_code = ["call-overload"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+markers = ["integracao: precisa do Postgres do docker compose (make up)"]
+addopts = "-m 'not integracao' --cov=agente --cov-report=term-missing --cov-fail-under=80"
+filterwarnings = ["ignore::DeprecationWarning"]

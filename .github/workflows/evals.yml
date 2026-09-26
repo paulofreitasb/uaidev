@@ -29,7 +29,7 @@ jobs:
       - run: uv run python -m agente.rag.ingestao
       - name: Roda os evals (o resumo vai para o job summary)
         run: uv run python -m evals.rodar_evals
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: resultados-evals

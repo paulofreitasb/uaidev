@@ -24,7 +24,7 @@ jobs:
       EVAL_MAX_CASOS: ${{ inputs.max_casos }}
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync --frozen --python 3.12
       - run: uv run python -m agente.rag.ingestao
       - name: Roda os evals (o resumo vai para o job summary)

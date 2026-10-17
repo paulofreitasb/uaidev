@@ -1,5 +1,5 @@
 # Imagem LOCAL do app (perfil "app" do compose). Não é uma imagem de produção.
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PYTHONUNBUFFERED=1
